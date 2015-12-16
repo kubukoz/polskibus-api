@@ -8,8 +8,8 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.kubukoz.polskibus.config.ServerConfig._
-import com.kubukoz.polskibus.domain.{City, CityJsonSupport}
-import com.kubukoz.polskibus.providers.{MockRoutesProvider, RoutesProvider}
+import com.kubukoz.polskibus.domain.{CityId, City, CityJsonSupport}
+import com.kubukoz.polskibus.providers.{InMemoryCityRepository, CityRepository, MockRoutesProvider, RoutesProvider}
 import com.typesafe.config.Config
 
 import scala.concurrent.ExecutionContextExecutor
@@ -25,9 +25,9 @@ trait Service extends CityJsonSupport {
   implicit val materializer: ActorMaterializer
   implicit val logger: LoggingAdapter
 
-  def getRoutesForCity(name: String): ToResponseMarshallable = {
+  def getRoutesForCity(cityId: CityId): ToResponseMarshallable = {
     implicit val timeout = Timeout(1 second)
-    (routeActor ? name).mapTo[List[City]]
+    (routeActor ? cityId).mapTo[List[City]]
   }
 
   lazy val routeActor = actorSystem.actorOf(Props[RouteActor])
@@ -36,11 +36,10 @@ trait Service extends CityJsonSupport {
 
   val routes =
     logRequestResult(ActorSystemName) {
-      pathPrefix("targets" / Rest) { city =>
+      pathPrefix("targets" / IntNumber) { cityId =>
         get {
-          println(city)
           complete {
-            getRoutesForCity(city)
+            getRoutesForCity(CityId(cityId))
           }
         }
       } ~ pathPrefix("cities" / "startingWith" / Rest) { nameStart =>
@@ -52,14 +51,14 @@ trait Service extends CityJsonSupport {
 }
 
 class RouteActor extends AbstractRouteActor {
-  override val routesProvider = MockRoutesProvider
+  override val cityRepository: CityRepository = InMemoryCityRepository
 }
 
 trait AbstractRouteActor extends Actor {
-  val routesProvider: RoutesProvider
+  val cityRepository: CityRepository
 
   override def receive: Receive = {
-    case cityName: String =>
-      sender ! routesProvider.getRoutes.find(_.start.name == cityName).map(_.targets.toList).getOrElse(Nil)
+    case cityId: CityId =>
+      sender ! cityRepository.routesFor(cityId)
   }
 }

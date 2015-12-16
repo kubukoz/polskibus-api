@@ -21,11 +21,42 @@ trait RoutesProvider {
     case _ => Nil
   }
 
-  def getRoutes = {
+  def getRoutes: Seq[CityPair] = {
     val partialPairs = getPartialPairs
     val allCities = partialPairs.flatMap(_._2.map(_.lift)).toMap
     getPartialPairs.map { case (id, cities) =>
       CityPair(allCities(id), cities)
     }
   }
+}
+
+object MockRoutesProvider extends RoutesProvider {
+  override def routeSource: Source = Source.fromFile("routes.xml")
+
+  override protected lazy val fetchRoutes: List[String] = super.fetchRoutes
+}
+
+trait CityRepository {
+  def routesFor(cityId: CityId): Seq[City]
+
+  def getOrFetchCities: Seq[City]
+
+  def getOrFetchRoutes: Seq[CityPair]
+}
+
+object InMemoryCityRepository extends CityRepository {
+  val routesProvider = MockRoutesProvider
+  var cachedRoutes: Seq[CityPair] = Nil
+
+  override def getOrFetchRoutes: Seq[CityPair] = cachedRoutes match {
+    case Nil => routesProvider.getRoutes
+    case _ => cachedRoutes
+  }
+
+  override def getOrFetchCities: Seq[City] = getOrFetchRoutes.map(_.start)
+
+  override def routesFor(cityId: CityId): Seq[City] =
+    getOrFetchRoutes
+      .find(_.start.id == cityId)
+      .map(_.targets.toList).getOrElse(Nil)
 }

@@ -1,11 +1,10 @@
 package com.kubukoz.polskibus
 
-import akka.actor.{Actor, ActorSystem}
+import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.kubukoz.polskibus.config.ServerConfig._
-import com.kubukoz.polskibus.providers.{MockRoutesProvider, RoutesProvider}
 import com.kubukoz.polskibus.service.Service
 import com.typesafe.config.ConfigFactory
 

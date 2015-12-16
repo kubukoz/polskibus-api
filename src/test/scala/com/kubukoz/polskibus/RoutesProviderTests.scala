@@ -1,5 +1,6 @@
 package com.kubukoz.polskibus
 
+import com.kubukoz.polskibus.providers.{MockRoutesProvider, RealRoutesProvider}
 import org.scalatest.{FlatSpec, Matchers}
 
 class RoutesProviderTests extends FlatSpec with Matchers {
