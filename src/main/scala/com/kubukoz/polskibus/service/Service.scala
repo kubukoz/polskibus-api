@@ -8,7 +8,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.kubukoz.polskibus.config.ServerConfig._
-import com.kubukoz.polskibus.domain.{CityId, City, CityJsonSupport}
+import com.kubukoz.polskibus.domain.{CitiesStartingWith, CityId, City, CityJsonSupport}
 import com.kubukoz.polskibus.providers.{InMemoryCityRepository, CityRepository, MockRoutesProvider, RoutesProvider}
 import com.typesafe.config.Config
 
@@ -25,14 +25,17 @@ trait Service extends CityJsonSupport {
   implicit val materializer: ActorMaterializer
   implicit val logger: LoggingAdapter
 
+  implicit val routeActorCallTimeout = Timeout(1 second)
+
   def getRoutesForCity(cityId: CityId): ToResponseMarshallable = {
-    implicit val timeout = Timeout(1 second)
     (routeActor ? cityId).mapTo[List[City]]
   }
 
-  lazy val routeActor = actorSystem.actorOf(Props[RouteActor])
+  def getCitiesStartingWith(nameStart: String): ToResponseMarshallable = {
+    (routeActor ? CitiesStartingWith(nameStart)).mapTo[List[City]]
+  }
 
-  def getCitiesStartingWith(nameStart: String) = ???
+  lazy val routeActor = actorSystem.actorOf(Props[RouteActor])
 
   val routes =
     logRequestResult(ActorSystemName) {
@@ -60,5 +63,7 @@ trait AbstractRouteActor extends Actor {
   override def receive: Receive = {
     case cityId: CityId =>
       sender ! cityRepository.routesFor(cityId)
+    case CitiesStartingWith(namePrefix) =>
+      sender ! cityRepository.getOrFetchCities.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))
   }
 }

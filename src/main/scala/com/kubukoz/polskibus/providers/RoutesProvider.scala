@@ -21,12 +21,12 @@ trait RoutesProvider {
     case _ => Nil
   }
 
-  def getRoutes: Seq[CityPair] = {
+  def getRoutes: List[CityPair] = {
     val partialPairs = getPartialPairs
     val allCities = partialPairs.flatMap(_._2.map(_.lift)).toMap
     getPartialPairs.map { case (id, cities) =>
       CityPair(allCities(id), cities)
-    }
+    }.toList
   }
 }
 
@@ -37,25 +37,25 @@ object MockRoutesProvider extends RoutesProvider {
 }
 
 trait CityRepository {
-  def routesFor(cityId: CityId): Seq[City]
+  def routesFor(cityId: CityId): List[City]
 
-  def getOrFetchCities: Seq[City]
+  def getOrFetchCities: List[City]
 
-  def getOrFetchRoutes: Seq[CityPair]
+  def getOrFetchRoutes: List[CityPair]
 }
 
 object InMemoryCityRepository extends CityRepository {
   val routesProvider = MockRoutesProvider
-  var cachedRoutes: Seq[CityPair] = Nil
+  var cachedRoutes: List[CityPair] = Nil
 
-  override def getOrFetchRoutes: Seq[CityPair] = cachedRoutes match {
+  override def getOrFetchRoutes: List[CityPair] = cachedRoutes match {
     case Nil => routesProvider.getRoutes
     case _ => cachedRoutes
   }
 
-  override def getOrFetchCities: Seq[City] = getOrFetchRoutes.map(_.start)
+  override def getOrFetchCities: List[City] = getOrFetchRoutes.map(_.start)
 
-  override def routesFor(cityId: CityId): Seq[City] =
+  override def routesFor(cityId: CityId): List[City] =
     getOrFetchRoutes
       .find(_.start.id == cityId)
       .map(_.targets.toList).getOrElse(Nil)
