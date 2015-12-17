@@ -11,7 +11,8 @@ val akkaStreamV = "2.0-M2"
 val scalaTestV = "2.2.5"
 
 libraryDependencies ++= Seq(
-  "com.typesafe.play" %% "play-json" % "2.3.4",
+  "com.typesafe.play" %% "play-json" % "2.4.3",
+  "com.typesafe.play" % "play-ws_2.11" % "2.4.3",
   "com.typesafe.akka" % "akka-actor_2.11" % "2.4.1",
   "com.typesafe.akka" %% "akka-actor" % akkaV,
   "com.typesafe.akka" %% "akka-stream-experimental" % akkaStreamV,

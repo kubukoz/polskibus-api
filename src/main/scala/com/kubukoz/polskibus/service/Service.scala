@@ -4,16 +4,19 @@ import akka.actor.{Actor, ActorSystem, Props}
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.server.Directives._
-import akka.pattern.ask
+import akka.pattern.{ask, pipe}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.kubukoz.polskibus.config.ServerConfig._
-import com.kubukoz.polskibus.domain.{CitiesStartingWith, CityId, City, CityJsonSupport}
-import com.kubukoz.polskibus.providers.{InMemoryCityRepository, CityRepository, MockRoutesProvider, RoutesProvider}
+import com.kubukoz.polskibus.domain.messages.{CitiesStartingWith, RoutesForCity}
+import com.kubukoz.polskibus.domain.{City, CityId, CityJsonSupport}
+import com.kubukoz.polskibus.providers.{CityRepository, InMemoryCityRepository}
+import com.stridehealth.geotracking.services.ImplicitJsonReadsWrites
 import com.typesafe.config.Config
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
 trait Service extends CityJsonSupport {
@@ -28,7 +31,7 @@ trait Service extends CityJsonSupport {
   implicit val routeActorCallTimeout = Timeout(1 second)
 
   def getRoutesForCity(cityId: CityId): ToResponseMarshallable = {
-    (routeActor ? cityId).mapTo[List[City]]
+    (routeActor ? RoutesForCity(cityId)).mapTo[List[City]]
   }
 
   def getCitiesStartingWith(nameStart: String): ToResponseMarshallable = {
@@ -61,9 +64,9 @@ trait AbstractRouteActor extends Actor {
   val cityRepository: CityRepository
 
   override def receive: Receive = {
-    case cityId: CityId =>
-      sender ! cityRepository.routesFor(cityId)
+    case RoutesForCity(cityId) =>
+      cityRepository.routesFor(cityId) pipeTo sender
     case CitiesStartingWith(namePrefix) =>
-      sender ! cityRepository.getOrFetchCities.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))
+      cityRepository.getOrFetchCities.map(_.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))) pipeTo sender
   }
 }
