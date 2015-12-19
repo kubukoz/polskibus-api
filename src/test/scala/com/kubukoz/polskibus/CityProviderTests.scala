@@ -12,7 +12,7 @@ class CityProviderTests extends FlatSpec with Matchers with CityProvider{
   "CityProvider.cities" should "return 50 cities" in{
     Await.result(cities, 5.seconds).size shouldEqual 50
   }
-  "CityProvider.routesFor(44)" should "return some routes" in{
+  "CityProvider.routesFor(44)" should "return 46 routes" in{
     Await.result(routesFor(CityId(44)), 5.seconds).size shouldEqual 46
   }
 }

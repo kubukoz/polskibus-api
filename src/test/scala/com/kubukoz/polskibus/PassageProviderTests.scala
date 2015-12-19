@@ -18,9 +18,9 @@ class PassageProviderTests extends FlatSpec with Matchers {
       RealPassageProvider.getPassages(CityId(44), CityId(15), LocalDate.now().plusDays(2)), 5.seconds)
       .size should be > 0
   }
-  "PassageProvider" should "provide appropriate amount of passages" in {
+  "PassageProvider" should "provide 3 passages" in {
     Await.result(
-    MockPassageProvider.getPassages(CityId(44), CityId(15), LocalDate.now().plusDays(2)), 5.seconds
+      MockPassageProvider.getPassages(CityId(44), CityId(15), LocalDate.now().plusDays(2)), 5.seconds
     ).size shouldEqual 3
   }
 }
