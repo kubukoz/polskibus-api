@@ -1,5 +1,7 @@
 package com.kubukoz.polskibus.service
 
+import java.time.LocalDate
+
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
@@ -8,14 +10,15 @@ import akka.pattern.{ask, pipe}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.kubukoz.polskibus.config.ServerConfig._
+import com.kubukoz.polskibus.domain._
 import com.kubukoz.polskibus.domain.messages.{CitiesStartingWith, RoutesForCity}
-import com.kubukoz.polskibus.domain.{City, CityId, CityJsonSupport}
-import com.kubukoz.polskibus.providers.{CityRepository, InMemoryCityRepository}
+import com.kubukoz.polskibus.providers.{RealPassageProvider, PassageProvider, CityRepository, InMemoryCityRepository}
 import com.typesafe.config.Config
+import play.api.libs.ws.ning.NingWSClient
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 
 trait Service extends CityJsonSupport {
@@ -27,14 +30,19 @@ trait Service extends CityJsonSupport {
   implicit val materializer: ActorMaterializer
   implicit val logger: LoggingAdapter
 
-  implicit val routeActorCallTimeout = Timeout(1 second)
+  implicit val routeActorCallTimeout = Timeout(5 seconds)
 
   def getRoutesForCity(cityId: CityId): ToResponseMarshallable = {
     (routeActor ? RoutesForCity(cityId)).mapTo[List[City]]
   }
 
+
   def getCitiesStartingWith(nameStart: String): ToResponseMarshallable = {
     (routeActor ? CitiesStartingWith(nameStart)).mapTo[List[City]]
+  }
+
+  def getPassages(from: String, to: String, dateFrom: String, dateTo: Option[String], adults: String): ToResponseMarshallable = {
+    (routeActor ? PassageRequest(CityId(from.toInt), CityId(to.toInt), LocalDate.parse(dateFrom), dateTo.map(LocalDate.parse), adults.toInt)).mapTo[List[PassageInfo]]
   }
 
   lazy val routeActor = actorSystem.actorOf(Props[RouteActor])
@@ -48,9 +56,17 @@ trait Service extends CityJsonSupport {
           }
         }
       } ~ pathPrefix("cities" / "startingWith" / Rest) { nameStart =>
-        get{
+        get {
           complete {
             getCitiesStartingWith(nameStart)
+          }
+        }
+      } ~ pathPrefix("passages") {
+        get {
+          parameters("from", "to", "dateFrom", "dateTo".?, "adults") { (from, to, dateFrom, dateTo, adults) =>
+            complete {
+              getPassages(from, to, dateFrom, dateTo, adults)
+            }
           }
         }
       }
@@ -59,15 +75,20 @@ trait Service extends CityJsonSupport {
 
 class RouteActor extends AbstractRouteActor {
   override val cityRepository: CityRepository = InMemoryCityRepository
+  override val passageProvider: PassageProvider = RealPassageProvider
 }
 
 trait AbstractRouteActor extends Actor {
   val cityRepository: CityRepository
+  val passageProvider: PassageProvider
 
   override def receive: Receive = {
     case RoutesForCity(cityId) =>
       cityRepository.routesFor(cityId) pipeTo sender
     case CitiesStartingWith(namePrefix) =>
       cityRepository.getOrFetchCities.map(_.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))) pipeTo sender
+    case PassageRequest(from, to, ds, deOpt, ad, lang) =>
+      implicit val ws = NingWSClient()
+      passageProvider.getPassages(from, to, ds, deOpt, ad, lang).map(_.toList) pipeTo sender
   }
 }
