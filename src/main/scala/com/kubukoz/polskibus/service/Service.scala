@@ -12,14 +12,16 @@ import akka.util.Timeout
 import com.kubukoz.polskibus.config.ServerConfig._
 import com.kubukoz.polskibus.domain._
 import com.kubukoz.polskibus.domain.messages.{CitiesStartingWith, RoutesForCity}
-import com.kubukoz.polskibus.providers.{RealPassageProvider, PassageProvider, CityRepository, InMemoryCityRepository}
+import com.kubukoz.polskibus.providers.{RealPassageProvider, PassageProvider, CityProvider, InMemoryCityProvider}
 import com.typesafe.config.Config
 import play.api.libs.ws.ning.NingWSClient
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{Future, ExecutionContextExecutor}
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import scalacache.ScalaCache
+import scalacache.guava.GuavaCache
 
 trait Service extends CityJsonSupport {
   implicit val actorSystem: ActorSystem
@@ -74,21 +76,22 @@ trait Service extends CityJsonSupport {
 }
 
 class RouteActor extends AbstractRouteActor {
-  override val cityRepository: CityRepository = InMemoryCityRepository
+  override val cityProvider: CityProvider = InMemoryCityProvider
   override val passageProvider: PassageProvider = RealPassageProvider
 }
 
 trait AbstractRouteActor extends Actor {
-  val cityRepository: CityRepository
+  val cityProvider: CityProvider
   val passageProvider: PassageProvider
+
+  implicit val ws = NingWSClient()
 
   override def receive: Receive = {
     case RoutesForCity(cityId) =>
-      cityRepository.routesFor(cityId) pipeTo sender
+      cityProvider.routesFor(cityId) pipeTo sender
     case CitiesStartingWith(namePrefix) =>
-      cityRepository.getOrFetchCities.map(_.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))) pipeTo sender
+      cityProvider.cities.map(_.filter(_.name.toLowerCase.startsWith(namePrefix.toLowerCase))) pipeTo sender
     case PassageRequest(from, to, ds, deOpt, ad, lang) =>
-      implicit val ws = NingWSClient()
       passageProvider.getPassages(from, to, ds, deOpt, ad, lang).map(_.toList) pipeTo sender
   }
 }

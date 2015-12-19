@@ -2,7 +2,7 @@ package com.kubukoz.polskibus.providers
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.time.{LocalDateTime, LocalDate}
+import java.time.{LocalDate, LocalDateTime}
 
 import com.kubukoz.polskibus.config.ServerConfig._
 import com.kubukoz.polskibus.domain._
@@ -10,11 +10,15 @@ import play.api.libs.json.{JsArray, JsObject, Json}
 import play.api.libs.ws.WSClient
 
 import scala.collection.immutable.Seq
-import scala.concurrent.Future
-import scala.io.Source
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.io.Source
+import scala.language.postfixOps
 import scala.util.Try
 import scala.xml.XML
+import scalacache.ScalaCache
+import scalacache.guava.GuavaCache
 
 trait RoutesProvider {
   def routeSource: Source
@@ -112,16 +116,11 @@ trait PassageProvider {
 
 }
 
-object MockPassageProvider extends PassageProvider {
-  override def getPassagesRaw(from: CityId, to: CityId, dateStart: LocalDate, dateEnd: Option[LocalDate], adults: Int, lang: String)
-                             (implicit ws: WSClient): Future[String] =
-    Future(Source.fromFile("routes.xml").getLines mkString "\n")
-}
+object RealPassageProvider extends PassageProvider {
 
-object RealPassageProvider extends PassageProvider{
   override def getPassagesRaw(from: CityId, to: CityId,
-                     dateStart: LocalDate, dateEnd: Option[LocalDate] = None,
-                     adults: Int, lang: String)(implicit ws: WSClient): Future[String] = {
+                              dateStart: LocalDate, dateEnd: Option[LocalDate] = None,
+                              adults: Int, lang: String)(implicit ws: WSClient): Future[String] = {
     val PolskiBusHomePage = "http://booking.polskibus.com/pricing/selections?lang=PL"
     ws.url(PolskiBusHomePage).get.flatMap { res =>
       val sesId = res.cookie("ASP.NET_SessionId").flatMap(_.value).get
@@ -163,41 +162,34 @@ object RealPassageProvider extends PassageProvider{
     }
   }
 
-}
+  implicit val cache = ScalaCache(GuavaCache())
 
-object MockRoutesProvider extends RoutesProvider {
-  override def routeSource: Source = Source.fromFile("routes.xml")
+  import scalacache._
+  import memoization._
 
-  override protected lazy val fetchRoutes: Future[List[String]] = super.fetchRoutes
-}
-
-trait CityRepository {
-  def routesFor(cityId: CityId): Future[List[City]]
-
-  def getOrFetchCities: Future[List[City]]
-
-  def getOrFetchRoutes: Future[List[CityPair]]
-}
-
-object InMemoryCityRepository extends CityRepository {
-  val routesProvider = MockRoutesProvider
-  var cachedRoutes: List[CityPair] = Nil
-
-  override def getOrFetchRoutes: Future[List[CityPair]] = cachedRoutes match {
-    case Nil =>
-      routesProvider.getRoutes.map{ routes =>
-        cachedRoutes = routes
-        routes
-      }
-    case _ => Future.successful(cachedRoutes)
-  }
-
-  override def getOrFetchCities: Future[List[City]] = getOrFetchRoutes.map(_.map(_.start))
-
-  override def routesFor(cityId: CityId): Future[List[City]] =
-    getOrFetchRoutes.map {
-      _.find(_.start.id == cityId)
-        .map(_.targets.toList).getOrElse(Nil)
+  override def getPassages(from: CityId, to: CityId, dateStart: LocalDate, dateEnd: Option[LocalDate], adults: Int, lang: String)(implicit ws: WSClient): Future[Seq[PassageInfo]] = {
+    memoize(6 hours) {
+      super.getPassages(from, to, dateStart, dateEnd, adults, lang)
     }
+  }
+}
 
+object MockPassageProvider extends PassageProvider{
+  override def getPassagesRaw(from: CityId, to: CityId, dateStart: LocalDate, dateEnd: Option[LocalDate], adults: Int, lang: String)(implicit ws: WSClient): Future[String] =
+    Future(Source.fromFile("sample_xml/passages.xml").getLines.mkString("\n"))
+}
+
+trait CityProvider {
+  val routesProvider: RoutesProvider
+
+  def cities: Future[Set[City]] = routesProvider.getRoutes.map(_.flatMap(_.targets).toSet)
+
+  def routesFor(cityId: CityId): Future[List[City]] = routesProvider.getRoutes.map {
+    _.find(_.start.id == cityId)
+      .map(_.targets.toList).getOrElse(Nil)
+  }
+}
+
+object InMemoryCityProvider extends CityProvider {
+  override val routesProvider = RealRoutesProvider
 }
