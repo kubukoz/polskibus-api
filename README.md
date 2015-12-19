@@ -17,3 +17,6 @@ returns a list of `PassageInfo` values corresponding to passages from the city w
     
 # Roadmap
 Kind of none
+
+# Code quality
+This is a prototype. It never was supposed to look good in code ;)
