@@ -1,4 +1,4 @@
-# polskibus
+# polskibus-api
 Polskibus.com API for routes, city search and passage search, written in Scala, served by akka-http.
 
 # Run service
