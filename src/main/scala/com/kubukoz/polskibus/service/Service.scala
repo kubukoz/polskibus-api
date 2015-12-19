@@ -11,7 +11,6 @@ import com.kubukoz.polskibus.config.ServerConfig._
 import com.kubukoz.polskibus.domain.messages.{CitiesStartingWith, RoutesForCity}
 import com.kubukoz.polskibus.domain.{City, CityId, CityJsonSupport}
 import com.kubukoz.polskibus.providers.{CityRepository, InMemoryCityRepository}
-import com.stridehealth.geotracking.services.ImplicitJsonReadsWrites
 import com.typesafe.config.Config
 
 import scala.concurrent.ExecutionContext.Implicits.global
