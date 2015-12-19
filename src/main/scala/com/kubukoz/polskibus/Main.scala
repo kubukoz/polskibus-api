@@ -75,6 +75,33 @@ object Demo {
       ws.url("http://booking.polskibus.com/Pricing/GetPrice")
         .withHeaders(headers: _*)
         .withQueryString(query: _*).execute("POST")
+        .map { res =>
+          val results = XML.loadString(res.body.split("<form(.+)>").last.split("</form>").head.replaceAll("(&nbsp;)|(<br>)", " "))
+          val rows = for {
+            div <- results \ "div"
+            if (div \ "@class").text == "onb_resultRow"
+          } yield for {
+            part <- div \\ "div"
+            if (part \ "@class").text contains "onb_col"
+          } yield part
+
+          rows.map { row =>
+            val info = List("two", "three", "four", "five", "six").map { num =>
+              num -> row.find(prt => (prt \ "@class").text contains "onb_" + num)
+            }.toMap
+
+            val pattern = "Odjazd(.+)\\-(.+)Przyjazd(.+)\\-(.+)".r
+            val Some((fromHour, fromDate, toHour, toDate)) = info("two").flatMap {
+              nod =>
+                val stronk = (nod \ "p" \ "strong").text.split("\n| ").mkString("")
+                stronk match {
+                  case pattern(a, b, c, d) => Some(a, b, c, d)
+                  case _ => None
+                }
+            }
+            (fromHour, fromDate, toHour, toDate) //we deserve this data
+          }
+        }
     }
   }
 
