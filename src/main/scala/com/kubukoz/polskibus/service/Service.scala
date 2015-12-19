@@ -48,8 +48,10 @@ trait Service extends CityJsonSupport {
           }
         }
       } ~ pathPrefix("cities" / "startingWith" / Rest) { nameStart =>
-        complete {
-          getCitiesStartingWith(nameStart)
+        get{
+          complete {
+            getCitiesStartingWith(nameStart)
+          }
         }
       }
     }

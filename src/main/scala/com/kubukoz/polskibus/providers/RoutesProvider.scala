@@ -63,7 +63,11 @@ object InMemoryCityRepository extends CityRepository {
   var cachedRoutes: List[CityPair] = Nil
 
   override def getOrFetchRoutes: Future[List[CityPair]] = cachedRoutes match {
-    case Nil => routesProvider.getRoutes
+    case Nil =>
+      routesProvider.getRoutes.map{ routes =>
+        cachedRoutes = routes
+        routes
+      }
     case _ => Future.successful(cachedRoutes)
   }
 
